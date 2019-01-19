@@ -1,66 +1,119 @@
-import {getFirstName, getLastName, isValidPassword} from '../src/utils/user';
+import 'cross-fetch/polyfill';
+import prisma from '../src/prisma';
+import seedDatabase, {userOne} from './utils/seedDatabase';
+import getClient from './utils/getClient';
+import {createUser, login, getProfile, getUsers} from './utils/operations';
 
-describe('Simple mock tests of user utility class', () => {
-    describe('getFirstName', () => {
-        it('should return first name when given full name', () => {
-            const testName = 'Jorge Montoya';
-            const expectedResults = 'Jorge';
-            const results = getFirstName(testName);
-    
-            expect(results).toEqual(expectedResults);
-        });
-        it('should return first name if only first name given', () => {
-            const expected = 'Meme';
-            const results = getFirstName(expected);
+describe('users', () => {
 
-            expect(results).toBe(expected);
-        });
-        it('should throw an error on empty string', () => {
-            
-            const error = new Error('Invalid name supplied');
-            expect(() => getFirstName('')).toThrow(error);
-        })
+    beforeEach(async () => {
+        jest.setTimeout(15000);
+        await seedDatabase();
     });
 
-    describe('getLastName', () => {
-        it('should throw error on empty string', () => {
+    describe('unauthenticated', () => {
 
-            const error = new Error('Invalid name supplied');
-            expect(() => getLastName('')).toThrow(error);
+        let client;
+        beforeEach(() => {
+            client = getClient();
         });
-        it('should return full string if only one word supplied', () => {
-            const expected = 'Meme';
-            const results = getLastName(expected);
 
-            expect(results).toBe(expected);
-        });
-        it('should return last word in fullname if first and last supplied', () => {
-            const testName = 'Jorge Montoya';
-            const expectedResults = 'Montoya';
-            const results = getLastName(testName);
+        describe('createUser', () => {
+
+            it('should create a new user', async () => {
+                const variables = {
+                    data: {
+                        name: 'Jorge Montoya',
+                        email: 'whatever@whatever.com',
+                        password:'12345678'
+                    }
+                };
+        
+                const response = await client.mutate({
+                    mutation:createUser,
+                    variables
+                });
+        
+                const userExists = await prisma.exists.User({
+                    id: response.data.createUser.user.id
+                });
+        
+                expect(userExists).toBeTruthy();
+            });
     
-            expect(results).toEqual(expectedResults);
-        })
+            it('should not create user with password smaller than 8 characters', async() => {
+                const variables = {
+                    data: {
+                        name: 'testy27',
+                        email: 'testy27@testy.com',
+                        password:'testyt'
+                    }
+                };
+    
+                await expect(
+                    client.mutate({mutation:createUser, variables})
+                    ).rejects.toThrow();
+            });
+    
+        });
+    
+        describe('login', () => {
+    
+            it('should not login with bad email', async() => {
+    
+                const variables = {
+                    data: {
+                        email: 'wrong@wrong.com',
+                        password:'testytesty'
+                    }
+                };
+        
+                await expect(
+                    client.mutate({mutation:login, variables})
+                    ).rejects.toThrow();
+            });
+    
+            it('should not login with bad password', async() => {
+                const variables = {
+                    data: {
+                        email: 'testy@testy.com',
+                        password:'wrongpassword'
+                    }
+                };
+        
+                await expect(
+                    client.mutate({mutation:login, variables})
+                    ).rejects.toThrow();
+            })
+    
+        });
+    
+        describe('query users', () => {
+    
+            it('should expose public author profiles', async () => {
+                const response = await client.query({query:getUsers});
+        
+                expect(response.data.users.length).toBe(2);
+                expect(response.data.users[0].email).toBe(null);
+                expect(response.data.users[0].name).toBe('Testy');
+            });
+    
+        });
     });
 
-    describe('isValidPassword', () => {
-        it('should reject password shorter than 8 characters', () => {
-            const testString = 'efvrge7';
-            const results = isValidPassword(testString);
+    describe('authenticated user', () => {
 
-            expect(results).toBeFalsy();
+        let client;
+        beforeEach(() => {
+            client = getClient(userOne.jwt);
         });
-        it("should reject password that contains the word 'password'", () => {
-            const testString = "fdgretyrgsdPasswordgfqferqtrq";
-            const results = isValidPassword(testString);
 
-            expect(results).toBeFalsy();
+        it('should fetch user profile', async () => {
+            const {data} = await client.query({query:getProfile});
+
+            expect(data.me.id).toBe(userOne.user.id);
+            expect(data.me.name).toBe(userOne.user.name);
+            expect(data.me.email).toBe(userOne.user.email);
         });
-        it('should accept password of proper length and context', () => {
-            const testString = "gfagegfyeryterftjfgyszdrdsrsfg3434$";
-            const results = isValidPassword(testString);
-
-            expect(results).toBeTruthy();
-        })
-    })
+    });
 });

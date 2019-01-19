@@ -38,10 +38,10 @@ const Mutation = {
         }
     },
     deleteUser(parent,args,{prisma, request},info){
-        const id = getUserId(request);
+        const userId = getUserId(request);
         const opArgs = {
             where: {
-                id
+                id:userId
             }
         };
         return prisma.mutation.deleteUser(opArgs, info);
@@ -50,10 +50,10 @@ const Mutation = {
         if(typeof data.password === 'string'){
             data.password = await hashPassword(data.password);
         }
-        const id = getUserId(request);
+        const userId = getUserId(request);
         const opArg = {
             where: {
-                id
+                id:userId
             },
             data
         };
@@ -162,12 +162,12 @@ const Mutation = {
             }
         }, info);
     },
-    async deleteComment(parent,{id, data},{prisma, request},info){
-        const userID = getUserId(request);
+    async deleteComment(parent,{id},{prisma, request},info){
+        const userId = getUserId(request);
         const commentExists = await prisma.exists.Comment({
             id,
             author: {
-                id: userID
+                id: userId
             }
         });
         if(!commentExists){
@@ -181,11 +181,11 @@ const Mutation = {
         return prisma.mutation.deleteComment(opArgs, info);
     },
     async updateComment(parent,{id, data},{prisma,request},info){
-        const userID = getUserId(request);
+        const userId = getUserId(request);
         const commentExists = await prisma.exists.Comment({
             id,
             author: {
-                id: userID
+                id: userId
             }
         });
         if(!commentExists){
